@@ -10,42 +10,42 @@ type TokenType string
 
 const (
 	// Palabras reservadas
-	TOKEN_DEFINIR      TokenType = "DEFINIR"
-	TOKEN_CONSTANTE    TokenType = "CONSTANTE"
-	TOKEN_FUNCION      TokenType = "FUNCION"
-	TOKEN_SI           TokenType = "SI"
-	TOKEN_ENTONCES     TokenType = "ENTONCES"
-	TOKEN_SINO         TokenType = "SINO"
-	TOKEN_MIENTRAS     TokenType = "MIENTRAS"
-	TOKEN_REPETIR      TokenType = "REPETIR"
-	TOKEN_DESDE        TokenType = "DESDE"
-	TOKEN_HASTA        TokenType = "HASTA"
-	TOKEN_HACER        TokenType = "HACER"
-	TOKEN_FIN          TokenType = "FIN"
-	TOKEN_MOSTRAR      TokenType = "MOSTRAR"
-	TOKEN_RETORNAR     TokenType = "RETORNAR"
-	TOKEN_SALIR        TokenType = "SALIR"
-	TOKEN_CONTINUAR    TokenType = "CONTINUAR"
-	TOKEN_VERDADERO    TokenType = "VERDADERO"
-	TOKEN_FALSO        TokenType = "FALSO"
-	TOKEN_NULO         TokenType = "NULO"
+	TOKEN_DEFINIR   TokenType = "DEFINIR"
+	TOKEN_CONSTANTE TokenType = "CONSTANTE"
+	TOKEN_FUNCION   TokenType = "FUNCION"
+	TOKEN_SI        TokenType = "SI"
+	TOKEN_ENTONCES  TokenType = "ENTONCES"
+	TOKEN_SINO      TokenType = "SINO"
+	TOKEN_MIENTRAS  TokenType = "MIENTRAS"
+	TOKEN_REPETIR   TokenType = "REPETIR"
+	TOKEN_DESDE     TokenType = "DESDE"
+	TOKEN_HASTA     TokenType = "HASTA"
+	TOKEN_HACER     TokenType = "HACER"
+	TOKEN_FIN       TokenType = "FIN"
+	TOKEN_MOSTRAR   TokenType = "MOSTRAR"
+	TOKEN_RETORNAR  TokenType = "RETORNAR"
+	TOKEN_SALIR     TokenType = "SALIR"
+	TOKEN_CONTINUAR TokenType = "CONTINUAR"
+	TOKEN_VERDADERO TokenType = "VERDADERO"
+	TOKEN_FALSO     TokenType = "FALSO"
+	TOKEN_NULO      TokenType = "NULO"
 
 	// Operadores
-	TOKEN_ASIGNACION   TokenType = "ASIGNACION"   // =
-	TOKEN_IGUAL        TokenType = "IGUAL"        // ==
-	TOKEN_DIFERENTE    TokenType = "DIFERENTE"    // !=
-	TOKEN_MENOR_IGUAL  TokenType = "MENOR_IGUAL"  // <=
-	TOKEN_MAYOR_IGUAL  TokenType = "MAYOR_IGUAL"  // >=
-	TOKEN_AND          TokenType = "AND"          // &&
-	TOKEN_OR           TokenType = "OR"           // ||
-	TOKEN_NOT          TokenType = "NOT"          // !
-	TOKEN_SUMA         TokenType = "SUMA"         // +
-	TOKEN_RESTA        TokenType = "RESTA"        // -
-	TOKEN_MULTIPLICAR  TokenType = "MULTIPLICAR"  // *
-	TOKEN_DIVIDIR      TokenType = "DIVIDIR"      // /
-	TOKEN_MODULO       TokenType = "MODULO"       // %
-	TOKEN_MENOR        TokenType = "MENOR"        // <
-	TOKEN_MAYOR        TokenType = "MAYOR"        // >
+	TOKEN_ASIGNACION  TokenType = "ASIGNACION"  // =
+	TOKEN_IGUAL       TokenType = "IGUAL"       // ==
+	TOKEN_DIFERENTE   TokenType = "DIFERENTE"   // !=
+	TOKEN_MENOR_IGUAL TokenType = "MENOR_IGUAL" // <=
+	TOKEN_MAYOR_IGUAL TokenType = "MAYOR_IGUAL" // >=
+	TOKEN_AND         TokenType = "AND"         // &&
+	TOKEN_OR          TokenType = "OR"          // ||
+	TOKEN_NOT         TokenType = "NOT"         // !
+	TOKEN_SUMA        TokenType = "SUMA"        // +
+	TOKEN_RESTA       TokenType = "RESTA"       // -
+	TOKEN_MULTIPLICAR TokenType = "MULTIPLICAR" // *
+	TOKEN_DIVIDIR     TokenType = "DIVIDIR"     // /
+	TOKEN_MODULO      TokenType = "MODULO"      // %
+	TOKEN_MENOR       TokenType = "MENOR"       // <
+	TOKEN_MAYOR       TokenType = "MAYOR"       // >
 
 	// Delimitadores
 	TOKEN_PARENTESIS_IZQ TokenType = "PARENTESIS_IZQ" // (
@@ -56,10 +56,10 @@ const (
 	TOKEN_PUNTO          TokenType = "PUNTO"          // ·
 
 	// Literales
-	TOKEN_ENTERO    TokenType = "ENTERO"
-	TOKEN_DECIMAL   TokenType = "DECIMAL"
-	TOKEN_CADENA    TokenType = "CADENA"
-	TOKEN_BOOLEANO  TokenType = "BOOLEANO"
+	TOKEN_ENTERO   TokenType = "ENTERO"
+	TOKEN_DECIMAL  TokenType = "DECIMAL"
+	TOKEN_CADENA   TokenType = "CADENA"
+	TOKEN_BOOLEANO TokenType = "BOOLEANO"
 
 	// Identificadores
 	TOKEN_IDENTIFICADOR TokenType = "IDENTIFICADOR"
@@ -70,10 +70,10 @@ const (
 )
 
 type Token struct {
-	Type    TokenType
-	Value   string
-	Line    int
-	Column  int
+	Type   TokenType
+	Value  string
+	Line   int
+	Column int
 }
 
 type Lexer struct {
@@ -87,8 +87,8 @@ type Lexer struct {
 
 func New(input string) *Lexer {
 	l := &Lexer{
-		input: input,
-		line:  1,
+		input:  input,
+		line:   1,
 		column: 1,
 	}
 	l.readChar()
@@ -101,18 +101,18 @@ func (l *Lexer) readChar() {
 		l.position = l.readPosition
 		return
 	}
-	
+
 	r, size := utf8.DecodeRuneInString(l.input[l.readPosition:])
 	if r == utf8.RuneError && size == 0 {
 		l.ch = 0
 		l.position = l.readPosition
 		return
 	}
-	
+
 	l.ch = r
 	l.position = l.readPosition
 	l.readPosition += size
-	
+
 	if l.ch == '\n' {
 		l.line++
 		l.column = 1
@@ -135,7 +135,7 @@ func (l *Lexer) skipWhitespace() {
 		for l.ch == ' ' || l.ch == '\t' || l.ch == '\r' || l.ch == '\n' {
 			l.readChar()
 		}
-		
+
 		// Saltar comentarios de línea
 		if l.ch == '/' && l.peekChar() == '/' {
 			for l.ch != '\n' && l.ch != 0 {
@@ -146,7 +146,7 @@ func (l *Lexer) skipWhitespace() {
 			}
 			continue
 		}
-		
+
 		// Saltar comentarios de bloque
 		if l.ch == '/' && l.peekChar() == '*' {
 			l.readChar() // consume '/'
@@ -164,7 +164,7 @@ func (l *Lexer) skipWhitespace() {
 			}
 			continue
 		}
-		
+
 		break
 	}
 }
@@ -195,30 +195,30 @@ func (l *Lexer) readString() (string, error) {
 	quote := l.ch
 	l.readChar()
 	position := l.position
-	
+
 	for l.ch != quote && l.ch != 0 {
 		if l.ch == '\\' {
 			l.readChar()
 		}
 		l.readChar()
 	}
-	
+
 	if l.ch == 0 {
 		return "", fmt.Errorf("cadena no cerrada en línea %d", l.line)
 	}
-	
+
 	l.readChar()
 	return l.input[position-1 : l.position], nil
 }
 
 func (l *Lexer) NextToken() Token {
 	var tok Token
-	
+
 	l.skipWhitespace()
-	
+
 	tok.Line = l.line
 	tok.Column = l.column
-	
+
 	switch l.ch {
 	case '=':
 		if l.peekChar() == '=' {
@@ -342,14 +342,14 @@ func (l *Lexer) NextToken() Token {
 			tok = Token{Type: TOKEN_EOF, Value: ""}
 		}
 	}
-	
+
 	l.readChar()
 	return tok
 }
 
 func (l *Lexer) Tokenize() ([]Token, error) {
 	var tokens []Token
-	
+
 	for {
 		tok := l.NextToken()
 		if tok.Type == TOKEN_ILLEGAL {
@@ -361,44 +361,45 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 			break
 		}
 	}
-	
+
 	return tokens, nil
 }
 
 func lookupIdent(ident string) TokenType {
 	keywords := map[string]TokenType{
-		"definir":    TOKEN_DEFINIR,
-		"constante":  TOKEN_CONSTANTE,
-		"función":    TOKEN_FUNCION,
-		"funcion":    TOKEN_FUNCION,
-		"si":         TOKEN_SI,
-		"entonces":   TOKEN_ENTONCES,
-		"sino":       TOKEN_SINO,
-		"mientras":   TOKEN_MIENTRAS,
-		"repetir":    TOKEN_REPETIR,
-		"desde":      TOKEN_DESDE,
-		"hasta":      TOKEN_HASTA,
-		"hacer":      TOKEN_HACER,
-		"fin":        TOKEN_FIN,
-		"mostrar":    TOKEN_MOSTRAR,
-		"retornar":   TOKEN_RETORNAR,
-		"salir":      TOKEN_SALIR,
-		"continuar":  TOKEN_CONTINUAR,
-		"verdadero":  TOKEN_VERDADERO,
-		"falso":      TOKEN_FALSO,
-		"nulo":       TOKEN_NULO,
+		"definir":   TOKEN_DEFINIR,
+		"constante": TOKEN_CONSTANTE,
+		"función":   TOKEN_FUNCION,
+		"funcion":   TOKEN_FUNCION,
+		"si":        TOKEN_SI,
+		"entonces":  TOKEN_ENTONCES,
+		"sino":      TOKEN_SINO,
+		"mientras":  TOKEN_MIENTRAS,
+		"repetir":   TOKEN_REPETIR,
+		"desde":     TOKEN_DESDE,
+		"hasta":     TOKEN_HASTA,
+		"hacer":     TOKEN_HACER,
+		"fin":       TOKEN_FIN,
+		"mostrar":   TOKEN_MOSTRAR,
+		"retornar":  TOKEN_RETORNAR,
+		"salir":     TOKEN_SALIR,
+		"continuar": TOKEN_CONTINUAR,
+		"verdadero": TOKEN_VERDADERO,
+		"falso":     TOKEN_FALSO,
+		"nulo":      TOKEN_NULO,
 	}
-	
+
 	if tok, ok := keywords[ident]; ok {
 		return tok
 	}
-	
+
 	// Detectar errores comunes de escritura en palabras clave
 	commonMistakes := map[string]string{
 		"defenir":   "definir",
 		"definr":    "definir",
 		"defnir":    "definir",
 		"defini":    "definir",
+		"definor":   "definir",
 		"constnte":  "constante",
 		"constatne": "constante",
 		"funcio":    "función",
@@ -410,15 +411,15 @@ func lookupIdent(ident string) TokenType {
 		"repeti":    "repetir",
 		"mostar":    "mostrar",
 		"mostrr":    "mostrar",
-		"retornr":    "retornar",
-		"retorna":    "retornar",
+		"retornr":   "retornar",
+		"retorna":   "retornar",
 	}
-	
+
 	if _, ok := commonMistakes[strings.ToLower(ident)]; ok {
 		// Retornar un token especial que indique un error de palabra clave
 		return TOKEN_ILLEGAL
 	}
-	
+
 	return TOKEN_IDENTIFICADOR
 }
 
@@ -440,7 +441,7 @@ func getKeywordSuggestion(ident string) string {
 		"retornr":   "retornar",
 		"retorna":   "retornar",
 	}
-	
+
 	if suggestion, ok := suggestions[strings.ToLower(ident)]; ok {
 		return suggestion
 	}
@@ -448,7 +449,7 @@ func getKeywordSuggestion(ident string) string {
 }
 
 func isLetter(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || 
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' ||
 		(ch >= 0x00C0 && ch <= 0x024F) || // Latin Extended-A y B (incluye acentos)
 		(ch >= 0x1E00 && ch <= 0x1EFF) // Latin Extended Additional
 }
@@ -456,4 +457,3 @@ func isLetter(ch rune) bool {
 func isDigit(ch rune) bool {
 	return ch >= '0' && ch <= '9'
 }
-
