@@ -1,15 +1,15 @@
 // Programa de ejemplo: Calculadora de números primos
-definir numero → 20
-definir contador → 2
-definir esPrimo → verdadero
+definir numero = 20
+definir contador = 2
+definir esPrimo = verdadero
 
 función verificarPrimo(n) hacer
-    si n ≤ 1 entonces
+    si n <= 1 entonces
         retornar falso
     fin
     
     repetir i desde 2 hasta n - 1 hacer
-        si n % i ↔ 0 entonces
+        si n % i == 0 entonces
             retornar falso
         fin
     fin

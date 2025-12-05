@@ -56,8 +56,12 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		stmt := p.parseStatement()
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
+		} else {
+			// Si no se pudo parsear la sentencia, avanzar para evitar bucle infinito
+			if p.currentToken.Type != lexer.TOKEN_EOF {
+				p.nextToken()
+			}
 		}
-		p.nextToken()
 	}
 	
 	if len(p.errors) > 0 {
@@ -83,7 +87,26 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseShowStatement()
 	case lexer.TOKEN_RETORNAR:
 		return p.parseReturnStatement()
+	case lexer.TOKEN_IDENTIFICADOR:
+		// Podría ser una llamada a función
+		if p.peekToken().Type == lexer.TOKEN_PARENTESIS_IZQ {
+			expr := p.parseCallExpression()
+			if expr != nil {
+				return &ast.ExpressionStatement{Expression: expr}
+			}
+		}
+		// Si no es una llamada, intentar parsear como expresión
+		expr := p.parseExpression(0)
+		if expr != nil {
+			return &ast.ExpressionStatement{Expression: expr}
+		}
+		return nil
 	default:
+		// Intentar parsear como expresión (para casos como llamadas a función)
+		expr := p.parseExpression(0)
+		if expr != nil {
+			return &ast.ExpressionStatement{Expression: expr}
+		}
 		return nil
 	}
 }
@@ -99,7 +122,7 @@ func (p *Parser) parseDeclareStatement() *ast.DeclareStatement {
 	p.nextToken()
 	
 	if p.currentToken.Type != lexer.TOKEN_ASIGNACION {
-		p.errors = append(p.errors, "se esperaba →")
+		p.errors = append(p.errors, "se esperaba =")
 		return nil
 	}
 	
@@ -168,7 +191,7 @@ func (p *Parser) parseRepeatStatement() *ast.RepeatStatement {
 	stmt.From = p.parseExpression(0)
 	
 	if p.currentToken.Type != lexer.TOKEN_HASTA {
-		p.errors = append(p.errors, "se esperaba 'hasta'")
+		p.errors = append(p.errors, fmt.Sprintf("se esperaba 'hasta', pero se encontró '%s' (tipo: %s)", p.currentToken.Value, p.currentToken.Type))
 		return nil
 	}
 	
@@ -272,8 +295,12 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 		stmt := p.parseStatement()
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
+		} else {
+			// Si no se pudo parsear, avanzar para evitar bucle infinito
+			if p.currentToken.Type != lexer.TOKEN_FIN && p.currentToken.Type != lexer.TOKEN_SINO && p.currentToken.Type != lexer.TOKEN_EOF {
+				p.nextToken()
+			}
 		}
-		p.nextToken()
 	}
 	
 	return block
@@ -285,8 +312,15 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		return nil
 	}
 	
-	for p.peekToken().Type != lexer.TOKEN_EOF && precedence < p.peekPrecedence() {
-		p.nextToken()
+	for p.currentToken.Type != lexer.TOKEN_EOF && 
+		p.currentToken.Type != lexer.TOKEN_PARENTESIS_DER &&
+		p.currentToken.Type != lexer.TOKEN_FIN &&
+		p.currentToken.Type != lexer.TOKEN_SINO &&
+		p.currentToken.Type != lexer.TOKEN_ENTONCES &&
+		p.currentToken.Type != lexer.TOKEN_HACER &&
+		p.currentToken.Type != lexer.TOKEN_COMA &&
+		precedence < p.currentPrecedence() {
+		// No avanzamos aquí porque currentToken ya es el operador infijo
 		left = p.parseInfixExpression(left)
 		if left == nil {
 			return nil
@@ -306,20 +340,36 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 		expr.Right = p.parseExpression(1)
 		return expr
 	case lexer.TOKEN_IDENTIFICADOR:
-		return &ast.Identifier{Value: p.currentToken.Value}
+		// Verificar si es una llamada a función
+		if p.peekToken().Type == lexer.TOKEN_PARENTESIS_IZQ {
+			return p.parseCallExpression()
+		}
+		ident := &ast.Identifier{Value: p.currentToken.Value}
+		p.nextToken()
+		return ident
 	case lexer.TOKEN_ENTERO:
 		val, _ := strconv.ParseInt(p.currentToken.Value, 10, 64)
-		return &ast.IntegerLiteral{Value: val}
+		lit := &ast.IntegerLiteral{Value: val}
+		p.nextToken()
+		return lit
 	case lexer.TOKEN_DECIMAL:
 		val, _ := strconv.ParseFloat(p.currentToken.Value, 64)
-		return &ast.FloatLiteral{Value: val}
+		lit := &ast.FloatLiteral{Value: val}
+		p.nextToken()
+		return lit
 	case lexer.TOKEN_CADENA:
 		val := strings.Trim(p.currentToken.Value, "\"'")
-		return &ast.StringLiteral{Value: val}
+		lit := &ast.StringLiteral{Value: val}
+		p.nextToken()
+		return lit
 	case lexer.TOKEN_VERDADERO:
-		return &ast.BooleanLiteral{Value: true}
+		lit := &ast.BooleanLiteral{Value: true}
+		p.nextToken()
+		return lit
 	case lexer.TOKEN_FALSO:
-		return &ast.BooleanLiteral{Value: false}
+		lit := &ast.BooleanLiteral{Value: false}
+		p.nextToken()
+		return lit
 	case lexer.TOKEN_PARENTESIS_IZQ:
 		p.nextToken()
 		expr := p.parseExpression(0)
@@ -332,6 +382,36 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	}
 }
 
+func (p *Parser) parseCallExpression() ast.Expression {
+	expr := &ast.CallExpression{
+		Function: &ast.Identifier{Value: p.currentToken.Value},
+	}
+	p.nextToken() // Consumir el identificador
+	
+	if p.currentToken.Type != lexer.TOKEN_PARENTESIS_IZQ {
+		return nil
+	}
+	
+	p.nextToken() // Consumir el paréntesis izquierdo
+	
+	// Parsear argumentos
+	expr.Arguments = []ast.Expression{}
+	if p.currentToken.Type != lexer.TOKEN_PARENTESIS_DER {
+		expr.Arguments = append(expr.Arguments, p.parseExpression(0))
+		
+		for p.currentToken.Type == lexer.TOKEN_COMA {
+			p.nextToken()
+			expr.Arguments = append(expr.Arguments, p.parseExpression(0))
+		}
+	}
+	
+	if p.currentToken.Type == lexer.TOKEN_PARENTESIS_DER {
+		p.nextToken()
+	}
+	
+	return expr
+}
+
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	expr := &ast.InfixExpression{
 		Left:     left,
@@ -340,7 +420,9 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	
 	precedence := p.currentPrecedence()
 	p.nextToken()
-	expr.Right = p.parseExpression(precedence)
+	// Para operadores de izquierda a derecha, usar precedence - 1 para que operadores de mayor precedencia
+	// se agrupen primero. Esto asegura que n % i == 0 se parsea como (n % i) == 0
+	expr.Right = p.parseExpression(precedence - 1)
 	
 	return expr
 }

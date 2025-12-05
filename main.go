@@ -38,18 +38,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("=== ANÁLISIS LÉXICO ===")
-	fmt.Printf("Total de tokens: %d\n\n", len(tokens))
-	for i, token := range tokens {
-		if i < 20 { // Mostrar primeros 20 tokens
-			fmt.Printf("[%d] %s: %s (línea %d, columna %d)\n", i+1, token.Type, token.Value, token.Line, token.Column)
-		}
-	}
-	if len(tokens) > 20 {
-		fmt.Printf("... (%d tokens más)\n", len(tokens)-20)
-	}
-	fmt.Println()
-
 	// Análisis sintáctico
 	p := parser.New(tokens)
 	ast, err := p.Parse()
@@ -58,19 +46,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("=== ÁRBOL SINTÁCTICO ===")
-	ast.Print(0)
-	fmt.Println()
-
 	// Evaluación
 	symbolTable := symbol.NewTable()
 	eval := evaluator.New(symbolTable)
 	
-	fmt.Println("=== EJECUCIÓN ===")
+	fmt.Println("=== EJECUCION ===")
 	err = eval.Evaluate(ast)
 	if err != nil {
-		fmt.Printf("Error en ejecución: %v\n", err)
-		os.Exit(1)
+		// Si es un ReturnValue, ignorarlo (solo es relevante dentro de funciones)
+		if !evaluator.IsReturnValue(err) {
+			fmt.Printf("Error en ejecución: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 

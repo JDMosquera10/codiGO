@@ -8,6 +8,7 @@ import (
 
 type Evaluator struct {
 	symbolTable *symbol.Table
+	parentScope *symbol.Table // Para manejar scopes anidados
 }
 
 func New(symbolTable *symbol.Table) *Evaluator {
@@ -34,8 +35,14 @@ func (e *Evaluator) Evaluate(node ast.Node) error {
 		return e.evaluateShowStatement(n)
 	case *ast.ReturnStatement:
 		return e.evaluateReturnStatement(n)
+	case *ast.FunctionStatement:
+		return e.evaluateFunctionStatement(n)
 	case *ast.BlockStatement:
 		return e.evaluateBlockStatement(n)
+	case *ast.ExpressionStatement:
+		// Evaluar la expresión pero ignorar el resultado (para llamadas a función sin asignación)
+		e.evaluateExpression(n.Expression)
+		return nil
 	default:
 		return fmt.Errorf("tipo de nodo no soportado: %T", node)
 	}
@@ -44,6 +51,11 @@ func (e *Evaluator) Evaluate(node ast.Node) error {
 func (e *Evaluator) evaluateProgram(program *ast.Program) error {
 	for _, stmt := range program.Statements {
 		if err := e.Evaluate(stmt); err != nil {
+			// Si es un ReturnValue, ignorarlo (solo es relevante dentro de funciones)
+			if IsReturnValue(err) {
+				continue
+			}
+			// Para otros errores, retornarlos
 			return err
 		}
 	}
@@ -79,9 +91,21 @@ func (e *Evaluator) evaluateIfStatement(stmt *ast.IfStatement) error {
 	condition := e.evaluateExpression(stmt.Condition)
 	
 	if isTruthy(condition) {
-		return e.Evaluate(stmt.Then)
+		if stmt.Then != nil {
+			err := e.Evaluate(stmt.Then)
+			// Si es un ReturnValue, propagarlo
+			if _, ok := err.(*ReturnValue); ok {
+				return err
+			}
+			return err
+		}
 	} else if stmt.Else != nil {
-		return e.Evaluate(stmt.Else)
+		err := e.Evaluate(stmt.Else)
+		// Si es un ReturnValue, propagarlo
+		if _, ok := err.(*ReturnValue); ok {
+			return err
+		}
+		return err
 	}
 	
 	return nil
@@ -95,6 +119,10 @@ func (e *Evaluator) evaluateWhileStatement(stmt *ast.WhileStatement) error {
 		}
 		
 		if err := e.Evaluate(stmt.Body); err != nil {
+			// Si es un ReturnValue, propagarlo
+			if IsReturnValue(err) {
+				return err
+			}
 			return err
 		}
 	}
@@ -114,8 +142,12 @@ func (e *Evaluator) evaluateRepeatStatement(stmt *ast.RepeatStatement) error {
 	}
 	
 	for i := *fromVal; i <= *toVal; i++ {
-		e.symbolTable.Set(stmt.Variable.Value, *fromVal)
+		e.symbolTable.Set(stmt.Variable.Value, int64(i))
 		if err := e.Evaluate(stmt.Body); err != nil {
+			// Si es un ReturnValue, propagarlo (para retornos dentro de bucles en funciones)
+			if IsReturnValue(err) {
+				return err
+			}
 			return err
 		}
 	}
@@ -129,18 +161,53 @@ func (e *Evaluator) evaluateShowStatement(stmt *ast.ShowStatement) error {
 	return nil
 }
 
+// ReturnValue es un error especial para indicar que se debe retornar de una función
+type ReturnValue struct {
+	Value interface{}
+}
+
+func (r *ReturnValue) Error() string {
+	return "return"
+}
+
+// IsReturnValue verifica si un error es un ReturnValue
+func IsReturnValue(err error) bool {
+	_, ok := err.(*ReturnValue)
+	return ok
+}
+
 func (e *Evaluator) evaluateReturnStatement(stmt *ast.ReturnStatement) error {
-	// En una implementación completa, esto retornaría el valor
-	// Por ahora solo lo evaluamos
+	var value interface{}
 	if stmt.Value != nil {
-		e.evaluateExpression(stmt.Value)
+		value = e.evaluateExpression(stmt.Value)
 	}
+	return &ReturnValue{Value: value}
+}
+
+// Tipo para representar funciones
+type Function struct {
+	Parameters []*ast.Identifier
+	Body       *ast.BlockStatement
+}
+
+func (e *Evaluator) evaluateFunctionStatement(stmt *ast.FunctionStatement) error {
+	// Registrar la función en la tabla de símbolos
+	fn := &Function{
+		Parameters: stmt.Parameters,
+		Body:       stmt.Body,
+	}
+	e.symbolTable.Set(stmt.Name.Value, fn)
 	return nil
 }
 
 func (e *Evaluator) evaluateBlockStatement(stmt *ast.BlockStatement) error {
 	for _, s := range stmt.Statements {
 		if err := e.Evaluate(s); err != nil {
+			// Si es un ReturnValue, propagarlo
+			if IsReturnValue(err) {
+				return err
+			}
+			// Para otros errores, retornarlos también
 			return err
 		}
 	}
@@ -158,11 +225,12 @@ func (e *Evaluator) evaluateExpression(expr ast.Expression) interface{} {
 	case *ast.BooleanLiteral:
 		return ex.Value
 	case *ast.Identifier:
+		// Buscar en el scope actual (que buscará recursivamente en los padres)
 		val, ok := e.symbolTable.Get(ex.Value)
-		if !ok {
-			return nil
+		if ok {
+			return val
 		}
-		return val
+		return nil
 	case *ast.InfixExpression:
 		return e.evaluateInfixExpression(ex)
 	case *ast.PrefixExpression:
@@ -229,9 +297,90 @@ func (e *Evaluator) evaluatePrefixExpression(expr *ast.PrefixExpression) interfa
 }
 
 func (e *Evaluator) evaluateCallExpression(expr *ast.CallExpression) interface{} {
-	// Implementación simplificada
-	// En producción, buscaría la función en la tabla de símbolos
-	return nil
+	// Obtener el nombre de la función
+	var fnName string
+	if ident, ok := expr.Function.(*ast.Identifier); ok {
+		fnName = ident.Value
+	} else {
+		return nil
+	}
+	
+	// Buscar la función en la tabla de símbolos
+	// Primero buscar en el scope actual
+	val, ok := e.symbolTable.Get(fnName)
+	
+	// Si no está en el scope actual, buscar en el scope padre (variables globales)
+	if !ok && e.parentScope != nil {
+		val, ok = e.parentScope.Get(fnName)
+	}
+	
+	// Si aún no está, buscar recursivamente en los scopes padres
+	if !ok {
+		parent := e.parentScope
+		for parent != nil {
+			val, ok = parent.Get(fnName)
+			if ok {
+				break
+			}
+			// En una implementación completa, tendríamos un campo parentScope en Table
+			// Por ahora, solo buscamos en el scope padre inmediato
+			break
+		}
+	}
+	
+	if !ok {
+		// Función no encontrada - esto podría ser un error
+		return nil
+	}
+	
+	fn, ok := val.(*Function)
+	if !ok {
+		return nil
+	}
+	
+	// Evaluar los argumentos
+	args := make([]interface{}, len(expr.Arguments))
+	for i, arg := range expr.Arguments {
+		args[i] = e.evaluateExpression(arg)
+	}
+	
+	// Guardar el scope actual
+	oldTable := e.symbolTable
+	oldParent := e.parentScope
+	
+	// Crear un nuevo scope para los parámetros con el scope anterior como padre
+	newTable := symbol.NewTableWithParent(oldTable)
+	e.symbolTable = newTable
+	e.parentScope = oldTable // El scope anterior es el padre
+	
+	// Asignar los argumentos a los parámetros
+	for i, param := range fn.Parameters {
+		if i < len(args) {
+			newTable.Set(param.Value, args[i])
+		}
+	}
+	
+	// Ejecutar el cuerpo de la función
+	var result interface{}
+	
+	// Ejecutar todas las sentencias del cuerpo
+	for _, stmt := range fn.Body.Statements {
+		err := e.Evaluate(stmt)
+		if err != nil {
+			// Si es un ReturnValue, capturar el valor y terminar
+			if retVal, ok := err.(*ReturnValue); ok {
+				result = retVal.Value
+				break
+			}
+			// Si es otro error, continuar (en producción se manejaría mejor)
+		}
+	}
+	
+	// Restaurar el scope anterior
+	e.symbolTable = oldTable
+	e.parentScope = oldParent
+	
+	return result
 }
 
 // Funciones auxiliares

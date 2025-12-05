@@ -31,14 +31,14 @@ const (
 	TOKEN_NULO         TokenType = "NULO"
 
 	// Operadores
-	TOKEN_ASIGNACION   TokenType = "ASIGNACION"   // →
-	TOKEN_IGUAL        TokenType = "IGUAL"        // ↔
-	TOKEN_DIFERENTE    TokenType = "DIFERENTE"    // ≠
-	TOKEN_MENOR_IGUAL  TokenType = "MENOR_IGUAL"  // ≤
-	TOKEN_MAYOR_IGUAL  TokenType = "MAYOR_IGUAL"  // ≥
-	TOKEN_AND          TokenType = "AND"          // ∧
-	TOKEN_OR           TokenType = "OR"           // ∨
-	TOKEN_NOT          TokenType = "NOT"          // ¬
+	TOKEN_ASIGNACION   TokenType = "ASIGNACION"   // =
+	TOKEN_IGUAL        TokenType = "IGUAL"        // ==
+	TOKEN_DIFERENTE    TokenType = "DIFERENTE"    // !=
+	TOKEN_MENOR_IGUAL  TokenType = "MENOR_IGUAL"  // <=
+	TOKEN_MAYOR_IGUAL  TokenType = "MAYOR_IGUAL"  // >=
+	TOKEN_AND          TokenType = "AND"          // &&
+	TOKEN_OR           TokenType = "OR"           // ||
+	TOKEN_NOT          TokenType = "NOT"          // !
 	TOKEN_SUMA         TokenType = "SUMA"         // +
 	TOKEN_RESTA        TokenType = "RESTA"        // -
 	TOKEN_MULTIPLICAR  TokenType = "MULTIPLICAR"  // *
@@ -220,22 +220,54 @@ func (l *Lexer) NextToken() Token {
 	tok.Column = l.column
 	
 	switch l.ch {
-	case '→':
-		tok = Token{Type: TOKEN_ASIGNACION, Value: "→"}
-	case '↔':
-		tok = Token{Type: TOKEN_IGUAL, Value: "↔"}
-	case '≠':
-		tok = Token{Type: TOKEN_DIFERENTE, Value: "≠"}
-	case '≤':
-		tok = Token{Type: TOKEN_MENOR_IGUAL, Value: "≤"}
-	case '≥':
-		tok = Token{Type: TOKEN_MAYOR_IGUAL, Value: "≥"}
-	case '∧':
-		tok = Token{Type: TOKEN_AND, Value: "∧"}
-	case '∨':
-		tok = Token{Type: TOKEN_OR, Value: "∨"}
-	case '¬':
-		tok = Token{Type: TOKEN_NOT, Value: "¬"}
+	case '=':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TOKEN_IGUAL, Value: string(ch) + string(l.ch)}
+		} else {
+			tok = Token{Type: TOKEN_ASIGNACION, Value: "="}
+		}
+	case '!':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TOKEN_DIFERENTE, Value: string(ch) + string(l.ch)}
+		} else {
+			tok = Token{Type: TOKEN_NOT, Value: "!"}
+		}
+	case '<':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TOKEN_MENOR_IGUAL, Value: string(ch) + string(l.ch)}
+		} else {
+			tok = Token{Type: TOKEN_MENOR, Value: "<"}
+		}
+	case '>':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TOKEN_MAYOR_IGUAL, Value: string(ch) + string(l.ch)}
+		} else {
+			tok = Token{Type: TOKEN_MAYOR, Value: ">"}
+		}
+	case '&':
+		if l.peekChar() == '&' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TOKEN_AND, Value: string(ch) + string(l.ch)}
+		} else {
+			tok = Token{Type: TOKEN_ILLEGAL, Value: string(l.ch)}
+		}
+	case '|':
+		if l.peekChar() == '|' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TOKEN_OR, Value: string(ch) + string(l.ch)}
+		} else {
+			tok = Token{Type: TOKEN_ILLEGAL, Value: string(l.ch)}
+		}
 	case '+':
 		tok = Token{Type: TOKEN_SUMA, Value: "+"}
 	case '-':
@@ -246,10 +278,6 @@ func (l *Lexer) NextToken() Token {
 		tok = Token{Type: TOKEN_DIVIDIR, Value: "/"}
 	case '%':
 		tok = Token{Type: TOKEN_MODULO, Value: "%"}
-	case '<':
-		tok = Token{Type: TOKEN_MENOR, Value: "<"}
-	case '>':
-		tok = Token{Type: TOKEN_MAYOR, Value: ">"}
 	case '(':
 		tok = Token{Type: TOKEN_PARENTESIS_IZQ, Value: "("}
 	case ')':
@@ -355,7 +383,9 @@ func lookupIdent(ident string) TokenType {
 }
 
 func isLetter(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || 
+		(ch >= 0x00C0 && ch <= 0x024F) || // Latin Extended-A y B (incluye acentos)
+		(ch >= 0x1E00 && ch <= 0x1EFF) // Latin Extended Additional
 }
 
 func isDigit(ch rune) bool {

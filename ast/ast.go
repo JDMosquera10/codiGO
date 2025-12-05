@@ -152,6 +152,16 @@ func (r *ReturnStatement) Print(indent int) {
 	}
 }
 
+// ExpressionStatement - para expresiones que se ejecutan como sentencias (ej: llamadas a función)
+type ExpressionStatement struct {
+	Expression Expression
+}
+
+func (e *ExpressionStatement) statementNode() {}
+func (e *ExpressionStatement) Print(indent int) {
+	e.Expression.Print(indent)
+}
+
 // Bloques
 type BlockStatement struct {
 	Statements []Statement
