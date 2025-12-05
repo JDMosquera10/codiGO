@@ -1,2 +1,9 @@
-definir x = "hola profe pongame 5"
-mostrar(x + " si algo le gasto una empanada o algo.")
+
+
+definir hola = "entonces perro"
+
+definir adios = "hola"
+
+hola = adios
+
+mostrar(hola)

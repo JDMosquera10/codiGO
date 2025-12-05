@@ -88,6 +88,10 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.TOKEN_RETORNAR:
 		return p.parseReturnStatement()
 	case lexer.TOKEN_IDENTIFICADOR:
+		// Podría ser una asignación (identificador = expresión)
+		if p.peekToken().Type == lexer.TOKEN_ASIGNACION {
+			return p.parseAssignStatement()
+		}
 		// Podría ser una llamada a función
 		if p.peekToken().Type == lexer.TOKEN_PARENTESIS_IZQ {
 			expr := p.parseCallExpression()
@@ -160,6 +164,34 @@ func (p *Parser) parseDeclareStatement() *ast.DeclareStatement {
 	return stmt
 }
 
+func (p *Parser) parseAssignStatement() *ast.AssignStatement {
+	stmt := &ast.AssignStatement{}
+	
+	// El identificador ya está en currentToken
+	stmt.Name = &ast.Identifier{Value: p.currentToken.Value}
+	p.nextToken() // Consumir el identificador
+	
+	// Debe seguir un '='
+	if p.currentToken.Type != lexer.TOKEN_ASIGNACION {
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba '=' después del identificador '%s', pero se encontró '%s' (tipo: %s)", 
+			p.currentToken.Line, p.currentToken.Column, stmt.Name.Value, p.currentToken.Value, p.currentToken.Type))
+		return nil
+	}
+	
+	p.nextToken() // Consumir el '='
+	
+	// Parsear la expresión del valor
+	stmt.Value = p.parseExpression(0)
+	
+	if stmt.Value == nil {
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba una expresión después del '='", 
+			p.currentToken.Line, p.currentToken.Column))
+		return nil
+	}
+	
+	return stmt
+}
+
 func (p *Parser) parseIfStatement() *ast.IfStatement {
 	stmt := &ast.IfStatement{}
 	
@@ -194,11 +226,32 @@ func (p *Parser) parseWhileStatement() *ast.WhileStatement {
 		p.nextToken()
 	}
 	
+	// Guardar la posición del inicio del mientras para el mensaje de error
+	whileLine := p.currentToken.Line
+	whileColumn := p.currentToken.Column
+	
 	stmt.Body = p.parseBlockStatement()
 	
-	if p.currentToken.Type == lexer.TOKEN_FIN {
-		p.nextToken()
+	// Requerir explícitamente un 'fin' para cerrar el bloque mientras
+	if p.currentToken.Type != lexer.TOKEN_FIN {
+		line := whileLine
+		column := whileColumn
+		if line == 0 {
+			line = 1
+		}
+		if column == 0 {
+			column = 1
+		}
+		found := p.currentToken.Value
+		if found == "" {
+			found = string(p.currentToken.Type)
+		}
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba 'fin' para cerrar el bloque 'mientras', pero se encontró '%s' (tipo: %s)", 
+			line, column, found, p.currentToken.Type))
+		return nil
 	}
+	
+	p.nextToken()
 	
 	return stmt
 }
@@ -230,11 +283,43 @@ func (p *Parser) parseRepeatStatement() *ast.RepeatStatement {
 		p.nextToken()
 	}
 	
+	// Guardar la posición del inicio del repetir para el mensaje de error
+	repeatLine := p.currentToken.Line
+	repeatColumn := p.currentToken.Column
+	
+	// Parsear el cuerpo del repetir
 	stmt.Body = p.parseBlockStatement()
 	
-	if p.currentToken.Type == lexer.TOKEN_FIN {
-		p.nextToken()
+	// Después de parsear el cuerpo, el token actual debería ser el 'fin' del repetir
+	// Si parseBlockStatement() se detuvo porque encontró un 'fin' con blockDepth == 0,
+	// ese 'fin' podría ser el de la función padre, no el del repetir
+	// Necesitamos verificar si realmente hay un 'fin' para el repetir
+	
+	// Si el token actual es 'fin', podría ser el del repetir o el de un bloque padre
+	// Para saberlo, necesitamos verificar si parseBlockStatement() consumió todos los tokens
+	// del cuerpo del repetir correctamente
+	
+	// Requerir explícitamente un 'fin' para cerrar el bloque repetir
+	if p.currentToken.Type != lexer.TOKEN_FIN {
+		line := repeatLine
+		column := repeatColumn
+		if line == 0 {
+			line = 1
+		}
+		if column == 0 {
+			column = 1
+		}
+		found := p.currentToken.Value
+		if found == "" {
+			found = string(p.currentToken.Type)
+		}
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba 'fin' para cerrar el bloque 'repetir', pero se encontró '%s' (tipo: %s)", 
+			line, column, found, p.currentToken.Type))
+		return nil
 	}
+	
+	// Consumir el 'fin' del repetir
+	p.nextToken()
 	
 	return stmt
 }
@@ -319,8 +404,44 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 		Statements: []ast.Statement{},
 	}
 	
-	for p.currentToken.Type != lexer.TOKEN_FIN && p.currentToken.Type != lexer.TOKEN_SINO && p.currentToken.Type != lexer.TOKEN_EOF {
+	// Contador para rastrear bloques anidados (si, mientras, repetir, función)
+	// Necesitamos contar cuántos bloques se abren para saber cuántos 'fin' necesitamos
+	blockDepth := 0
+	
+	for p.currentToken.Type != lexer.TOKEN_EOF {
+		// Detectar apertura de bloques anidados ANTES de parsear
+		if p.currentToken.Type == lexer.TOKEN_SI || 
+		   p.currentToken.Type == lexer.TOKEN_MIENTRAS || 
+		   p.currentToken.Type == lexer.TOKEN_REPETIR ||
+		   p.currentToken.Type == lexer.TOKEN_FUNCION {
+			blockDepth++
+		}
+		
+		// Si encontramos un 'fin' y no hay bloques anidados abiertos, este 'fin' es para el bloque actual
+		if p.currentToken.Type == lexer.TOKEN_FIN && blockDepth == 0 {
+			// No consumimos el 'fin', lo dejamos para que el parser padre lo consuma
+			break
+		}
+		
+		// Si encontramos un 'sino' y no hay bloques anidados abiertos, este 'sino' es para el if padre
+		if p.currentToken.Type == lexer.TOKEN_SINO && blockDepth == 0 {
+			break
+		}
+		
 		stmt := p.parseStatement()
+		
+		// Después de parsear, verificar si se cerró un bloque anidado
+		// Si parseamos un bloque (si, mientras, repetir, función), estos consumen su propio 'fin'
+		// así que necesitamos decrementar el contador
+		if stmt != nil {
+			// Verificar si la sentencia parseada es un bloque que consume un 'fin'
+			switch stmt.(type) {
+			case *ast.IfStatement, *ast.WhileStatement, *ast.RepeatStatement, *ast.FunctionStatement:
+				// Estos bloques consumen su propio 'fin', así que decrementamos el contador
+				blockDepth--
+			}
+		}
+		
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
 		} else {
