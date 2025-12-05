@@ -88,6 +88,10 @@ func (p *Parser) parseStatement() ast.Statement {
 	case lexer.TOKEN_RETORNAR:
 		return p.parseReturnStatement()
 	case lexer.TOKEN_IDENTIFICADOR:
+		// Podría ser una asignación (identificador = expresión)
+		if p.peekToken().Type == lexer.TOKEN_ASIGNACION {
+			return p.parseAssignStatement()
+		}
 		// Podría ser una llamada a función
 		if p.peekToken().Type == lexer.TOKEN_PARENTESIS_IZQ {
 			expr := p.parseCallExpression()
@@ -156,6 +160,34 @@ func (p *Parser) parseDeclareStatement() *ast.DeclareStatement {
 	
 	p.nextToken()
 	stmt.Value = p.parseExpression(0)
+	
+	return stmt
+}
+
+func (p *Parser) parseAssignStatement() *ast.AssignStatement {
+	stmt := &ast.AssignStatement{}
+	
+	// El identificador ya está en currentToken
+	stmt.Name = &ast.Identifier{Value: p.currentToken.Value}
+	p.nextToken() // Consumir el identificador
+	
+	// Debe seguir un '='
+	if p.currentToken.Type != lexer.TOKEN_ASIGNACION {
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba '=' después del identificador '%s', pero se encontró '%s' (tipo: %s)", 
+			p.currentToken.Line, p.currentToken.Column, stmt.Name.Value, p.currentToken.Value, p.currentToken.Type))
+		return nil
+	}
+	
+	p.nextToken() // Consumir el '='
+	
+	// Parsear la expresión del valor
+	stmt.Value = p.parseExpression(0)
+	
+	if stmt.Value == nil {
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba una expresión después del '='", 
+			p.currentToken.Line, p.currentToken.Column))
+		return nil
+	}
 	
 	return stmt
 }
