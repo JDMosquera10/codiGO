@@ -303,7 +303,19 @@ func (l *Lexer) NextToken() Token {
 	default:
 		if isLetter(l.ch) {
 			ident := l.readIdentifier()
-			tok.Type = lookupIdent(ident)
+			tokType := lookupIdent(ident)
+			if tokType == TOKEN_ILLEGAL {
+				// Es un error de palabra clave mal escrita
+				suggestion := getKeywordSuggestion(ident)
+				tok = Token{
+					Type:   TOKEN_ILLEGAL,
+					Value:  fmt.Sprintf("palabra clave incorrecta '%s' (¿quisiste decir '%s'?)", ident, suggestion),
+					Line:   l.line,
+					Column: l.column,
+				}
+				return tok
+			}
+			tok.Type = tokType
 			tok.Value = ident
 			return tok
 		} else if isDigit(l.ch) {
@@ -341,7 +353,8 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 	for {
 		tok := l.NextToken()
 		if tok.Type == TOKEN_ILLEGAL {
-			return nil, fmt.Errorf("token ilegal '%s' en línea %d, columna %d", tok.Value, tok.Line, tok.Column)
+			// El mensaje de error ya está formateado en el token
+			return nil, fmt.Errorf("línea %d, columna %d: %s", tok.Line, tok.Column, tok.Value)
 		}
 		tokens = append(tokens, tok)
 		if tok.Type == TOKEN_EOF {
@@ -379,7 +392,59 @@ func lookupIdent(ident string) TokenType {
 	if tok, ok := keywords[ident]; ok {
 		return tok
 	}
+	
+	// Detectar errores comunes de escritura en palabras clave
+	commonMistakes := map[string]string{
+		"defenir":   "definir",
+		"definr":    "definir",
+		"defnir":    "definir",
+		"defini":    "definir",
+		"constnte":  "constante",
+		"constatne": "constante",
+		"funcio":    "función",
+		"funcion":   "función",
+		"entoces":   "entonces",
+		"entonces":  "entonces",
+		"mientas":   "mientras",
+		"repetr":    "repetir",
+		"repeti":    "repetir",
+		"mostar":    "mostrar",
+		"mostrr":    "mostrar",
+		"retornr":    "retornar",
+		"retorna":    "retornar",
+	}
+	
+	if _, ok := commonMistakes[strings.ToLower(ident)]; ok {
+		// Retornar un token especial que indique un error de palabra clave
+		return TOKEN_ILLEGAL
+	}
+	
 	return TOKEN_IDENTIFICADOR
+}
+
+func getKeywordSuggestion(ident string) string {
+	suggestions := map[string]string{
+		"defenir":   "definir",
+		"definr":    "definir",
+		"defnir":    "definir",
+		"defini":    "definir",
+		"constnte":  "constante",
+		"constatne": "constante",
+		"funcio":    "función",
+		"entoces":   "entonces",
+		"mientas":   "mientras",
+		"repetr":    "repetir",
+		"repeti":    "repetir",
+		"mostar":    "mostrar",
+		"mostrr":    "mostrar",
+		"retornr":   "retornar",
+		"retorna":   "retornar",
+	}
+	
+	if suggestion, ok := suggestions[strings.ToLower(ident)]; ok {
+		return suggestion
+	}
+	return "definir" // Por defecto
 }
 
 func isLetter(ch rune) bool {

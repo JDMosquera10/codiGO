@@ -100,12 +100,20 @@ func (p *Parser) parseStatement() ast.Statement {
 		if expr != nil {
 			return &ast.ExpressionStatement{Expression: expr}
 		}
+		// Si no se pudo parsear como expresión, podría ser un error
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: no se pudo parsear el identificador '%s' como una sentencia válida", 
+			p.currentToken.Line, p.currentToken.Column, p.currentToken.Value))
 		return nil
 	default:
 		// Intentar parsear como expresión (para casos como llamadas a función)
 		expr := p.parseExpression(0)
 		if expr != nil {
 			return &ast.ExpressionStatement{Expression: expr}
+		}
+		// Si no se pudo parsear, es un error
+		if p.currentToken.Type != lexer.TOKEN_EOF {
+			p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: token inesperado '%s' (tipo: %s)", 
+				p.currentToken.Line, p.currentToken.Column, p.currentToken.Value, p.currentToken.Type))
 		}
 		return nil
 	}
@@ -118,11 +126,31 @@ func (p *Parser) parseDeclareStatement() *ast.DeclareStatement {
 	
 	p.nextToken()
 	
+	if p.currentToken.Type != lexer.TOKEN_IDENTIFICADOR {
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba un identificador después de 'definir', pero se encontró '%s' (tipo: %s)", 
+			p.currentToken.Line, p.currentToken.Column, p.currentToken.Value, p.currentToken.Type))
+		return nil
+	}
+	
 	stmt.Name = &ast.Identifier{Value: p.currentToken.Value}
 	p.nextToken()
 	
 	if p.currentToken.Type != lexer.TOKEN_ASIGNACION {
-		p.errors = append(p.errors, "se esperaba =")
+		expected := "="
+		found := p.currentToken.Value
+		if found == "" {
+			found = string(p.currentToken.Type)
+		}
+		line := p.currentToken.Line
+		column := p.currentToken.Column
+		if line == 0 {
+			line = 1 // Valor por defecto si no hay información de línea
+		}
+		if column == 0 {
+			column = 1 // Valor por defecto si no hay información de columna
+		}
+		p.errors = append(p.errors, fmt.Sprintf("línea %d, columna %d: se esperaba '%s' después del identificador '%s', pero se encontró '%s' (tipo: %s)", 
+			line, column, expected, stmt.Name.Value, found, p.currentToken.Type))
 		return nil
 	}
 	
