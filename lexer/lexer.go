@@ -386,6 +386,8 @@ func lookupIdent(ident string) TokenType {
 		"continuar":  TOKEN_CONTINUAR,
 		"verdadero":  TOKEN_VERDADERO,
 		"falso":      TOKEN_FALSO,
+		"true":       TOKEN_VERDADERO,  // Soporte para inglés
+		"false":      TOKEN_FALSO,      // Soporte para inglés
 		"nulo":       TOKEN_NULO,
 	}
 	

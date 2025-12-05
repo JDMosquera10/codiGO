@@ -1,9 +1,13 @@
 
+funcion hola1(todobien) hacer
+    definir variableprueba = verdadero
+    si todobien == variableprueba entonces
+        mostrar("uy manito es que tin")
+    sino
+        mostrar("aahh bueno")
+    fin
+fin
 
-definir hola = "entonces perro"
 
-definir adios = "hola"
 
-hola = adios
-
-mostrar(hola)
+hola1(verdadero)
