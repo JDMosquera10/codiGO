@@ -17,12 +17,12 @@ función verificarPrimo(n) hacer
     retornar verdadero
 fin
 
-mostrar("Verificando si " + numero + " es primo...")
+mostrar("Verificando si el numero es primo " + numero)
 
 si verificarPrimo(numero) entonces
-    mostrar("El número " + numero + " es primo")
+    mostrar("El número es primo " + numero)
 sino
-    mostrar("El número " + numero + " no es primo")
+    mostrar("El número no es primo" + numero)
 fin
 
 // Mostrar todos los primos hasta el número
